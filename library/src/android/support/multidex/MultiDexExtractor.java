@@ -140,6 +140,8 @@ final class MultiDexExtractor {
             out = new ZipOutputStream(new FileOutputStream(tmp));
             try {
                 ZipEntry classesDex = new ZipEntry("classes.dex");
+                // keep zip entry time since it is the criteria used by Dalvik
+                classesDex.setTime(dexFile.getTime());
                 out.putNextEntry(classesDex);
 
                 byte[] buffer = new byte[BUFFER_SIZE];
