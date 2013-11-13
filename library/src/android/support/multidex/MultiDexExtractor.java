@@ -16,15 +16,11 @@
 
 package android.support.multidex;
 
-import android.content.Context;
-import android.content.pm.ApplicationInfo;
-import android.util.Log;
-
 import java.io.Closeable;
 import java.io.File;
+import java.io.FileFilter;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -32,6 +28,10 @@ import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
+
+import android.content.Context;
+import android.content.pm.ApplicationInfo;
+import android.util.Log;
 
 /**
  * Exposes application secondary dex files as files in the application data
@@ -67,10 +67,12 @@ final class MultiDexExtractor {
     static List<File> load(Context context, ApplicationInfo applicationInfo, File dexDir)
             throws IOException {
 
-        String extractedFilePrefix = new File(applicationInfo.sourceDir).getName()
+        File sourceApk = new File(applicationInfo.sourceDir);
+        long lastModified = sourceApk.lastModified();
+        String extractedFilePrefix = sourceApk.getName()
                 + EXTRACTED_NAME_EXT;
 
-        prepareDexDir(dexDir, extractedFilePrefix);
+        prepareDexDir(dexDir, extractedFilePrefix, lastModified);
 
         final List<File> files = new ArrayList<File>();
         ZipFile apk = new ZipFile(applicationInfo.sourceDir);
@@ -85,7 +87,8 @@ final class MultiDexExtractor {
                 files.add(extractedFile);
 
                 if (!extractedFile.isFile()) {
-                    extract(context, apk, dexFile, extractedFile, extractedFilePrefix);
+                    extract(context, apk, dexFile, extractedFile, extractedFilePrefix,
+                            lastModified);
                 }
                 secondaryNumber++;
                 dexFile = apk.getEntry(DEX_PREFIX + secondaryNumber + DEX_SUFFIX);
@@ -101,18 +104,20 @@ final class MultiDexExtractor {
         return files;
     }
 
-    private static void prepareDexDir(File dexDir, final String extractedFilePrefix)
-            throws IOException {
+    private static void prepareDexDir(File dexDir, final String extractedFilePrefix,
+            final long sourceLastModified) throws IOException {
         dexDir.mkdir();
         if (!dexDir.isDirectory()) {
             throw new IOException("Failed to create dex directory " + dexDir.getPath());
         }
 
         // Clean possible old files
-        FilenameFilter filter = new FilenameFilter() {
+        FileFilter filter = new FileFilter() {
+
             @Override
-            public boolean accept(File dir, String name) {
-                return !name.startsWith(extractedFilePrefix);
+            public boolean accept(File pathname) {
+                return (!pathname.getName().startsWith(extractedFilePrefix))
+                    || (pathname.lastModified() < sourceLastModified);
             }
         };
         File[] files = dexDir.listFiles(filter);
@@ -129,7 +134,8 @@ final class MultiDexExtractor {
 
     private static void extract(
             Context context, ZipFile apk, ZipEntry dexFile, File extractTo,
-            String extractedFilePrefix) throws IOException, FileNotFoundException {
+            String extractedFilePrefix, long sourceLastModified)
+                    throws IOException, FileNotFoundException {
 
         InputStream in = apk.getInputStream(dexFile);
         ZipOutputStream out = null;
@@ -152,6 +158,10 @@ final class MultiDexExtractor {
                 }
             } finally {
                 closeQuietly(out);
+            }
+            if (!tmp.setLastModified(sourceLastModified)) {
+                Log.e(TAG, "Failed to set time of \"" + tmp.getAbsolutePath() + "\"." +
+                        " This may cause problems with later updates of the apk.");
             }
             Log.i(TAG, "Renaming to " + extractTo.getPath());
             if (!tmp.renameTo(extractTo)) {
