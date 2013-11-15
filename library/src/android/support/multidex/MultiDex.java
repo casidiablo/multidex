@@ -16,13 +16,13 @@
 
 package android.support.multidex;
 
+import dalvik.system.DexFile;
+
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.util.Log;
-
-import dalvik.system.DexFile;
 
 import java.io.File;
 import java.io.IOException;
@@ -36,6 +36,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Set;
+import java.util.zip.ZipFile;
 
 /**
  * Monkey patches {@link Context#getClassLoader() the application context class
@@ -361,6 +362,7 @@ public final class MultiDex {
             StringBuilder path = new StringBuilder((String) pathField.get(loader));
             String[] extraPaths = new String[extraSize];
             File[] extraFiles = new File[extraSize];
+            ZipFile[] extraZips = new ZipFile[extraSize];
             DexFile[] extraDexs = new DexFile[extraSize];
             for (ListIterator<File> iterator = additionalClassPathEntries.listIterator();
                     iterator.hasNext();) {
@@ -370,12 +372,14 @@ public final class MultiDex {
                 int index = iterator.previousIndex();
                 extraPaths[index] = entryPath;
                 extraFiles[index] = additionalEntry;
+                extraZips[index] = new ZipFile(additionalEntry);
                 extraDexs[index] = DexFile.loadDex(entryPath, entryPath + ".dex", 0);
             }
 
             pathField.set(loader, path.toString());
             expandFieldArray(loader, "mPaths", extraPaths);
             expandFieldArray(loader, "mFiles", extraFiles);
+            expandFieldArray(loader, "mZips", extraZips);
             expandFieldArray(loader, "mDexs", extraDexs);
         }
     }
