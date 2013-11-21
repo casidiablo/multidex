@@ -16,6 +16,10 @@
 
 package android.support.multidex;
 
+import android.content.Context;
+import android.content.pm.ApplicationInfo;
+import android.util.Log;
+
 import java.io.Closeable;
 import java.io.File;
 import java.io.FileFilter;
@@ -28,10 +32,6 @@ import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
-
-import android.content.Context;
-import android.content.pm.ApplicationInfo;
-import android.util.Log;
 
 /**
  * Exposes application secondary dex files as files in the application data
@@ -152,8 +152,10 @@ final class MultiDexExtractor {
 
                 byte[] buffer = new byte[BUFFER_SIZE];
                 int length = in.read(buffer);
-                while (length > 0) {
-                    out.write(buffer, 0, length);
+                while (length != -1) {
+                    if (length > 0) {
+                        out.write(buffer, 0, length);
+                    }
                     length = in.read(buffer);
                 }
             } finally {
