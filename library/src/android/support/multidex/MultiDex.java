@@ -151,14 +151,14 @@ public final class MultiDex {
                 }
 
                 File dexDir = new File(context.getFilesDir(), SECONDARY_FOLDER_NAME);
-                List<File> files = MultiDexExtractor.load(context, applicationInfo, dexDir);
+                List<File> files = MultiDexExtractor.load(applicationInfo, dexDir);
                 if (!files.isEmpty()) {
                     if (Build.VERSION.SDK_INT >= 19) {
                         V19.install(loader, files, dexDir);
                     } else if (Build.VERSION.SDK_INT >= 14) {
                         V14.install(loader, files, dexDir);
                     } else {
-                        V4.install(loader, files, dexDir);
+                        V4.install(loader, files);
                     }
                 }
             }
@@ -346,13 +346,12 @@ public final class MultiDex {
      * Installer for platform versions 4 to 13.
      */
     private static final class V4 {
-        private static void install(ClassLoader loader, List<File> additionalClassPathEntries,
-                File optimizedDirectory)
+        private static void install(ClassLoader loader, List<File> additionalClassPathEntries)
                         throws IllegalArgumentException, IllegalAccessException,
                         NoSuchFieldException, IOException {
             /* The patched class loader is expected to be a descendant of
              * dalvik.system.DexClassLoader. We modify its
-             * dalvik.system.DexPathList pathList field to append additional DEX
+             * fields mPaths, mFiles, mZips and mDexs to append additional DEX
              * file entries.
              */
             int extraSize = additionalClassPathEntries.size();

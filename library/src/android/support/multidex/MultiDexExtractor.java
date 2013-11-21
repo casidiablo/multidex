@@ -16,7 +16,6 @@
 
 package android.support.multidex;
 
-import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.util.Log;
 
@@ -57,14 +56,12 @@ final class MultiDexExtractor {
      * Extracts application secondary dexes into files in the application data
      * directory.
      *
-     * @param dexDir
-     *
      * @return a list of files that were created. The list may be empty if there
      *         are no secondary dex files.
      * @throws IOException if encounters a problem while reading or writing
      *         secondary dex files
      */
-    static List<File> load(Context context, ApplicationInfo applicationInfo, File dexDir)
+    static List<File> load(ApplicationInfo applicationInfo, File dexDir)
             throws IOException {
 
         File sourceApk = new File(applicationInfo.sourceDir);
@@ -87,7 +84,7 @@ final class MultiDexExtractor {
                 files.add(extractedFile);
 
                 if (!extractedFile.isFile()) {
-                    extract(context, apk, dexFile, extractedFile, extractedFilePrefix,
+                    extract(apk, dexFile, extractedFile, extractedFilePrefix,
                             lastModified);
                 }
                 secondaryNumber++;
@@ -132,8 +129,7 @@ final class MultiDexExtractor {
         }
     }
 
-    private static void extract(
-            Context context, ZipFile apk, ZipEntry dexFile, File extractTo,
+    private static void extract(ZipFile apk, ZipEntry dexFile, File extractTo,
             String extractedFilePrefix, long sourceLastModified)
                     throws IOException, FileNotFoundException {
 
@@ -153,9 +149,7 @@ final class MultiDexExtractor {
                 byte[] buffer = new byte[BUFFER_SIZE];
                 int length = in.read(buffer);
                 while (length != -1) {
-                    if (length > 0) {
-                        out.write(buffer, 0, length);
-                    }
+                    out.write(buffer, 0, length);
                     length = in.read(buffer);
                 }
             } finally {
