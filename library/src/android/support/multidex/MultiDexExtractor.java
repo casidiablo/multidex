@@ -22,13 +22,17 @@ import android.util.Log;
 import java.io.Closeable;
 import java.io.File;
 import java.io.FileFilter;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
@@ -49,6 +53,12 @@ final class MultiDexExtractor {
 
     private static final String EXTRACTED_NAME_EXT = ".classes";
     private static final String EXTRACTED_SUFFIX = ".zip";
+    private static final int MAX_EXTRACT_ATTEMPTS = 3;
+    private static final int MAX_ATTEMPTS_NO_SUCH_ALGORITHM = 2;
+
+
+    private static final char[] HEX_DIGITS = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+        'A', 'B', 'C', 'D', 'E', 'F' };
 
     private static final int BUFFER_SIZE = 0x4000;
 
@@ -84,8 +94,33 @@ final class MultiDexExtractor {
                 files.add(extractedFile);
 
                 if (!extractedFile.isFile()) {
-                    extract(apk, dexFile, extractedFile, extractedFilePrefix,
-                            lastModified);
+                    int numAttempts = 0;
+                    boolean isExtractionSuccessful = false;
+                    while (numAttempts < MAX_EXTRACT_ATTEMPTS && !isExtractionSuccessful) {
+                        numAttempts++;
+
+                        // Create a zip file (extractedFile) containing only the secondary dex file
+                        // (dexFile) from the apk.
+                        extract(apk, dexFile, extractedFile, extractedFilePrefix,
+                                lastModified);
+
+                        // Verify that the extracted file is indeed a zip file.
+                        isExtractionSuccessful = verifyZipFile(extractedFile);
+
+                        // Log the sha1 of the extracted zip file
+                        Log.i(TAG, "Extraction " + (isExtractionSuccessful ? "success" : "failed") +
+                                " - SHA1 of " + extractedFile.getAbsolutePath() + ": " +
+                                computeSha1Digest(extractedFile));
+                        if (!isExtractionSuccessful) {
+                            // Delete the extracted file
+                            extractedFile.delete();
+                        }
+                    }
+                    if (!isExtractionSuccessful) {
+                        throw new IOException("Could not create zip file " +
+                                extractedFile.getAbsolutePath() + " for secondary dex (" +
+                                secondaryNumber + ")");
+                    }
                 }
                 secondaryNumber++;
                 dexFile = apk.getEntry(DEX_PREFIX + secondaryNumber + DEX_SUFFIX);
@@ -171,6 +206,26 @@ final class MultiDexExtractor {
     }
 
     /**
+     * Returns whether the file is a valid zip file.
+     */
+    private static boolean verifyZipFile(File file) {
+        try {
+            ZipFile zipFile = new ZipFile(file);
+            try {
+                zipFile.close();
+            } catch (IOException e) {
+                Log.w(TAG, "Failed to close zip file: " + file.getAbsolutePath());
+            }
+            return true;
+        } catch (ZipException ex) {
+            Log.w(TAG, "File " + file.getAbsolutePath() + " is not a valid zip file.", ex);
+        } catch (IOException ex) {
+            Log.w(TAG, "Got an IOException trying to open zip file: " + file.getAbsolutePath(), ex);
+        }
+        return false;
+    }
+
+    /**
      * Closes the given {@code Closeable}. Suppresses any IO exceptions.
      */
     private static void closeQuietly(Closeable closeable) {
@@ -179,5 +234,66 @@ final class MultiDexExtractor {
         } catch (IOException e) {
             Log.w(TAG, "Failed to close resource", e);
         }
+    }
+
+    private static synchronized String computeSha1Digest(File file) {
+        MessageDigest messageDigest = getMessageDigest("SHA1");
+        if (messageDigest == null) {
+            return "";
+        }
+        FileInputStream in = null;
+        try {
+            in = new FileInputStream(file);
+            byte[] bytes = new byte[8192];
+            int byteCount;
+            while ((byteCount = in.read(bytes)) != -1) {
+                messageDigest.update(bytes, 0, byteCount);
+            }
+            return toHex(messageDigest.digest(), false /* zeroTerminated */)
+                    .toLowerCase();
+        } catch (IOException e) {
+            return "";
+        } finally {
+            if (in != null) {
+                closeQuietly(in);
+            }
+        }
+    }
+
+    /**
+     * Encodes a byte array as a hexadecimal representation of bytes.
+     */
+    private static String toHex(byte[] in, boolean zeroTerminated) {
+        int length = in.length;
+        StringBuilder out = new StringBuilder(length * 2);
+        for (int i = 0; i < length; i++) {
+            if (zeroTerminated && i == length - 1 && (in[i] & 0xff) == 0) {
+                break;
+            }
+            out.append(HEX_DIGITS[(in[i] & 0xf0) >>> 4]);
+            out.append(HEX_DIGITS[in[i] & 0x0f]);
+        }
+        return out.toString();
+    }
+
+    /**
+     * Retrieves the message digest instance for a given hash algorithm. Makes
+     * {@link #MAX_ATTEMPTS_NO_SUCH_ALGORITHM} to successfully retrieve the
+     * MessageDigest or will return null.
+     */
+    private static MessageDigest getMessageDigest(String hashAlgorithm) {
+        for (int i = 0; i < MAX_ATTEMPTS_NO_SUCH_ALGORITHM; i++) {
+            try {
+                MessageDigest messageDigest = MessageDigest.getInstance(hashAlgorithm);
+                if (messageDigest != null) {
+                    return messageDigest;
+                }
+            } catch (NoSuchAlgorithmException e) {
+                // try again - this is needed due to a bug in MessageDigest that can have corrupted
+                // internal state.
+                continue;
+            }
+        }
+        return null;
     }
 }
