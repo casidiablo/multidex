@@ -26,6 +26,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.channels.FileLock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.ZipEntry;
@@ -51,6 +52,7 @@ final class MultiDexExtractor {
     private static final String EXTRACTED_NAME_EXT = ".classes";
     private static final String EXTRACTED_SUFFIX = ".zip";
     private static final int MAX_EXTRACT_ATTEMPTS = 3;
+    private static final String LOCK_FILENAME = "renamelock";
 
     private static final int BUFFER_SIZE = 0x4000;
 
@@ -180,16 +182,28 @@ final class MultiDexExtractor {
                     length = in.read(buffer);
                 }
             } finally {
-                closeQuietly(out);
+                out.close();
             }
             if (!tmp.setLastModified(sourceLastModified)) {
                 Log.e(TAG, "Failed to set time of \"" + tmp.getAbsolutePath() + "\"." +
                         " This may cause problems with later updates of the apk.");
             }
             Log.i(TAG, "Renaming to " + extractTo.getPath());
-            if (!tmp.renameTo(extractTo)) {
-                throw new IOException("Failed to rename \"" + tmp.getAbsolutePath() + "\" to \"" +
-                        extractTo.getAbsolutePath() + "\"");
+            File lockFile = new File(extractTo.getParentFile(), LOCK_FILENAME);
+            // Grab the file lock.
+            FileOutputStream lockFileOutputStream = new FileOutputStream(lockFile);
+            FileLock lockFileLock = lockFileOutputStream.getChannel().lock();
+            try {
+                if (!extractTo.exists()) {
+                    if (!tmp.renameTo(extractTo)) {
+                        throw new IOException("Failed to rename \"" + tmp.getAbsolutePath() +
+                                "\" to \"" + extractTo.getAbsolutePath() + "\"");
+                    }
+                }
+            } finally {
+                // Release the lock file.
+                lockFileLock.release();
+                lockFileOutputStream.close();
             }
         } finally {
             closeQuietly(in);
@@ -205,10 +219,10 @@ final class MultiDexExtractor {
             ZipFile zipFile = new ZipFile(file);
             try {
                 zipFile.close();
+                return true;
             } catch (IOException e) {
                 Log.w(TAG, "Failed to close zip file: " + file.getAbsolutePath());
             }
-            return true;
         } catch (ZipException ex) {
             Log.w(TAG, "File " + file.getAbsolutePath() + " is not a valid zip file.", ex);
         } catch (IOException ex) {
