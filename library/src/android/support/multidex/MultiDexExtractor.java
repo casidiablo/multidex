@@ -19,6 +19,7 @@ package android.support.multidex;
 import android.content.pm.ApplicationInfo;
 import android.util.Log;
 
+import java.io.BufferedOutputStream;
 import java.io.Closeable;
 import java.io.File;
 import java.io.FileFilter;
@@ -26,7 +27,6 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.channels.FileLock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.ZipEntry;
@@ -52,7 +52,6 @@ final class MultiDexExtractor {
     private static final String EXTRACTED_NAME_EXT = ".classes";
     private static final String EXTRACTED_SUFFIX = ".zip";
     private static final int MAX_EXTRACT_ATTEMPTS = 3;
-    private static final String LOCK_FILENAME = "renamelock";
 
     private static final int BUFFER_SIZE = 0x4000;
 
@@ -168,7 +167,7 @@ final class MultiDexExtractor {
                 extractTo.getParentFile());
         Log.i(TAG, "Extracting " + tmp.getPath());
         try {
-            out = new ZipOutputStream(new FileOutputStream(tmp));
+            out = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(tmp)));
             try {
                 ZipEntry classesDex = new ZipEntry("classes.dex");
                 // keep zip entry time since it is the criteria used by Dalvik
@@ -181,6 +180,7 @@ final class MultiDexExtractor {
                     out.write(buffer, 0, length);
                     length = in.read(buffer);
                 }
+                out.closeEntry();
             } finally {
                 out.close();
             }
@@ -189,21 +189,9 @@ final class MultiDexExtractor {
                         " This may cause problems with later updates of the apk.");
             }
             Log.i(TAG, "Renaming to " + extractTo.getPath());
-            File lockFile = new File(extractTo.getParentFile(), LOCK_FILENAME);
-            // Grab the file lock.
-            FileOutputStream lockFileOutputStream = new FileOutputStream(lockFile);
-            FileLock lockFileLock = lockFileOutputStream.getChannel().lock();
-            try {
-                if (!extractTo.exists()) {
-                    if (!tmp.renameTo(extractTo)) {
-                        throw new IOException("Failed to rename \"" + tmp.getAbsolutePath() +
-                                "\" to \"" + extractTo.getAbsolutePath() + "\"");
-                    }
-                }
-            } finally {
-                // Release the lock file.
-                lockFileLock.release();
-                lockFileOutputStream.close();
+            if (!tmp.renameTo(extractTo)) {
+                throw new IOException("Failed to rename \"" + tmp.getAbsolutePath() +
+                        "\" to \"" + extractTo.getAbsolutePath() + "\"");
             }
         } finally {
             closeQuietly(in);
