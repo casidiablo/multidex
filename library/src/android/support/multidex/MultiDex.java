@@ -266,6 +266,9 @@ public final class MultiDex {
                     new ArrayList<File>(additionalClassPathEntries), optimizedDirectory,
                     suppressedExceptions));
             if (suppressedExceptions.size() > 0) {
+                for (IOException e : suppressedExceptions) {
+                    Log.w(TAG, "Exception in makeDexElement", e);
+                }
                 Field suppressedExceptionsField =
                         findField(loader, "dexElementsSuppressedExceptions");
                 IOException[] dexElementsSuppressedExceptions =

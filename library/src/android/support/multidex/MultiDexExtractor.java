@@ -66,7 +66,7 @@ final class MultiDexExtractor {
      */
     static List<File> load(ApplicationInfo applicationInfo, File dexDir)
             throws IOException {
-
+        Log.i(TAG, "load(" + applicationInfo.sourceDir + ")");
         File sourceApk = new File(applicationInfo.sourceDir);
         long lastModified = sourceApk.lastModified();
         String extractedFilePrefix = sourceApk.getName()
@@ -86,7 +86,9 @@ final class MultiDexExtractor {
                 File extractedFile = new File(dexDir, fileName);
                 files.add(extractedFile);
 
+                Log.i(TAG, "Need extracted file " + extractedFile);
                 if (!extractedFile.isFile()) {
+                    Log.i(TAG, "Extraction is needed for file " + extractedFile);
                     int numAttempts = 0;
                     boolean isExtractionSuccessful = false;
                     while (numAttempts < MAX_EXTRACT_ATTEMPTS && !isExtractionSuccessful) {
@@ -114,6 +116,8 @@ final class MultiDexExtractor {
                                 extractedFile.getAbsolutePath() + " for secondary dex (" +
                                 secondaryNumber + ")");
                     }
+                } else {
+                    Log.i(TAG, "No extraction needed for " + extractedFile + " of size " + extractedFile.length());
                 }
                 secondaryNumber++;
                 dexFile = apk.getEntry(DEX_PREFIX + secondaryNumber + DEX_SUFFIX);
@@ -151,8 +155,11 @@ final class MultiDexExtractor {
             return;
         }
         for (File oldFile : files) {
+            Log.w(TAG, "Trying to delete old file " + oldFile.getPath() + " of size " + oldFile.length());
             if (!oldFile.delete()) {
                 Log.w(TAG, "Failed to delete old file " + oldFile.getPath());
+            } else {
+                Log.w(TAG, "Deleted old file " + oldFile.getPath());
             }
         }
     }
