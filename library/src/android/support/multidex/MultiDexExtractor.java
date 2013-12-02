@@ -64,9 +64,9 @@ final class MultiDexExtractor {
      * @throws IOException if encounters a problem while reading or writing
      *         secondary dex files
      */
-    static List<File> load(ApplicationInfo applicationInfo, File dexDir)
+    static List<File> load(ApplicationInfo applicationInfo, File dexDir, boolean forceReload)
             throws IOException {
-        Log.i(TAG, "load(" + applicationInfo.sourceDir + ")");
+        Log.i(TAG, "load(" + applicationInfo.sourceDir + ", forceReload=" + forceReload + ")");
         File sourceApk = new File(applicationInfo.sourceDir);
         long lastModified = sourceApk.lastModified();
         String extractedFilePrefix = sourceApk.getName()
@@ -87,7 +87,7 @@ final class MultiDexExtractor {
                 files.add(extractedFile);
 
                 Log.i(TAG, "Need extracted file " + extractedFile);
-                if (!extractedFile.isFile()) {
+                if (forceReload || !extractedFile.isFile()) {
                     Log.i(TAG, "Extraction is needed for file " + extractedFile);
                     int numAttempts = 0;
                     boolean isExtractionSuccessful = false;
@@ -133,6 +133,10 @@ final class MultiDexExtractor {
         return files;
     }
 
+    /**
+     * This removes any old zip and dex files or extraneous files from the secondary-dexes
+     * directory.
+     */
     private static void prepareDexDir(File dexDir, final String extractedFilePrefix,
             final long sourceLastModified) throws IOException {
         dexDir.mkdir();
@@ -146,7 +150,7 @@ final class MultiDexExtractor {
             @Override
             public boolean accept(File pathname) {
                 return (!pathname.getName().startsWith(extractedFilePrefix))
-                    || (pathname.lastModified() < sourceLastModified);
+                        || (pathname.lastModified() < sourceLastModified);
             }
         };
         File[] files = dexDir.listFiles(filter);
@@ -209,7 +213,7 @@ final class MultiDexExtractor {
     /**
      * Returns whether the file is a valid zip file.
      */
-    private static boolean verifyZipFile(File file) {
+    static boolean verifyZipFile(File file) {
         try {
             ZipFile zipFile = new ZipFile(file);
             try {

@@ -151,14 +151,18 @@ public final class MultiDex {
                 }
 
                 File dexDir = new File(context.getFilesDir(), SECONDARY_FOLDER_NAME);
-                List<File> files = MultiDexExtractor.load(applicationInfo, dexDir);
-                if (!files.isEmpty()) {
-                    if (Build.VERSION.SDK_INT >= 19) {
-                        V19.install(loader, files, dexDir);
-                    } else if (Build.VERSION.SDK_INT >= 14) {
-                        V14.install(loader, files, dexDir);
+                List<File> files = MultiDexExtractor.load(applicationInfo, dexDir, false);
+                if (checkValidZipFiles(files)) {
+                    installSecondaryDexes(loader, dexDir, files);
+                } else {
+                    Log.w(TAG, "Files were not valid zip files.  Forcing a reload.");
+                    // Try again, but this time force a reload of the zip file.
+                    files = MultiDexExtractor.load(applicationInfo, dexDir, true);
+                    if (checkValidZipFiles(files)) {
+                        installSecondaryDexes(loader, dexDir, files);
                     } else {
-                        V4.install(loader, files);
+                        // Second time didn't work, give up
+                        throw new RuntimeException("Zip files were not valid.");
                     }
                 }
             }
@@ -167,6 +171,33 @@ public final class MultiDex {
             Log.e(TAG, "Multidex installation failure", e);
             throw new RuntimeException("Multi dex installation failed (" + e.getMessage() + ").");
         }
+    }
+
+    private static void installSecondaryDexes(ClassLoader loader, File dexDir, List<File> files)
+            throws IllegalArgumentException, IllegalAccessException, NoSuchFieldException,
+            InvocationTargetException, NoSuchMethodException, IOException {
+        if (!files.isEmpty()) {
+            if (Build.VERSION.SDK_INT >= 19) {
+                V19.install(loader, files, dexDir);
+            } else if (Build.VERSION.SDK_INT >= 14) {
+                V14.install(loader, files, dexDir);
+            } else {
+                V4.install(loader, files);
+            }
+        }
+    }
+
+    /**
+     * Returns whether all files in the list are valid zip files.  If {@code files} is empty, then
+     * returns true.
+     */
+    private static boolean checkValidZipFiles(List<File> files) {
+        for (File file : files) {
+            if (!MultiDexExtractor.verifyZipFile(file)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
