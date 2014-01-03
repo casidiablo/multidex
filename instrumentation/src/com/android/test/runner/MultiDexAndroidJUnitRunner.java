@@ -16,10 +16,9 @@
 
 package com.android.test.runner;
 
-import com.android.test.runner.AndroidJUnitRunner;
-
 import android.os.Bundle;
 import android.support.multidex.MultiDex;
+import android.support.test.runner.AndroidJUnitRunner;
 
 /**
  * Extends AndroidJUnitRunner to patch up things for GMS Core multi-dex support.
