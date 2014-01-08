@@ -1,0 +1,15 @@
+apply plugin: 'android-library'
+
+android {
+    compileSdkVersion 4
+    buildToolsVersion = 19
+
+    sourceSets {
+        main {
+            java.srcDirs         = ['src']
+            resources.srcDirs    = ['res']
+            res.srcDirs          = ['src']
+            manifest.srcFile 'AndroidManifest.xml'
+        }
+    }
+}
