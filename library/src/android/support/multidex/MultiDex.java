@@ -151,13 +151,13 @@ public final class MultiDex {
                 }
 
                 File dexDir = new File(context.getFilesDir(), SECONDARY_FOLDER_NAME);
-                List<File> files = MultiDexExtractor.load(applicationInfo, dexDir, false);
+                List<File> files = MultiDexExtractor.load(context, applicationInfo, dexDir, false);
                 if (checkValidZipFiles(files)) {
                     installSecondaryDexes(loader, dexDir, files);
                 } else {
                     Log.w(TAG, "Files were not valid zip files.  Forcing a reload.");
                     // Try again, but this time force a reload of the zip file.
-                    files = MultiDexExtractor.load(applicationInfo, dexDir, true);
+                    files = MultiDexExtractor.load(context, applicationInfo, dexDir, true);
                     if (checkValidZipFiles(files)) {
                         installSecondaryDexes(loader, dexDir, files);
                     } else {

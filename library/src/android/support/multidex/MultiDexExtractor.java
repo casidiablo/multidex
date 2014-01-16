@@ -16,6 +16,8 @@
 
 package android.support.multidex;
 
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.util.Log;
 
@@ -27,6 +29,8 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.ZipEntry;
@@ -55,6 +59,11 @@ final class MultiDexExtractor {
 
     private static final int BUFFER_SIZE = 0x4000;
 
+    private static final String PREFS_FILE = "multidex.version";
+    private static final String KEY_APK_SIZE = "apk_size";
+    private static final String KEY_NUM_DEX_FILES = "num_dex";
+    private static final String KEY_PREFIX_DEX_CRC = "crc";
+
     /**
      * Extracts application secondary dexes into files in the application data
      * directory.
@@ -64,18 +73,25 @@ final class MultiDexExtractor {
      * @throws IOException if encounters a problem while reading or writing
      *         secondary dex files
      */
-    static List<File> load(ApplicationInfo applicationInfo, File dexDir, boolean forceReload)
-            throws IOException {
+    static List<File> load(Context context, ApplicationInfo applicationInfo, File dexDir,
+            boolean forceReload) throws IOException {
         Log.i(TAG, "load(" + applicationInfo.sourceDir + ", forceReload=" + forceReload + ")");
-        File sourceApk = new File(applicationInfo.sourceDir);
-        long lastModified = sourceApk.lastModified();
-        String extractedFilePrefix = sourceApk.getName()
-                + EXTRACTED_NAME_EXT;
+        final File sourceApk = new File(applicationInfo.sourceDir);
+        final long currentApkSize = sourceApk.length();
+        final boolean isNewApk = getStoredApkSize(context) != currentApkSize;
+        final String extractedFilePrefix = sourceApk.getName() + EXTRACTED_NAME_EXT;
 
-        prepareDexDir(dexDir, extractedFilePrefix, lastModified);
+        prepareDexDir(dexDir, extractedFilePrefix, isNewApk);
 
         final List<File> files = new ArrayList<File>();
-        ZipFile apk = new ZipFile(applicationInfo.sourceDir);
+        final ZipFile apk = new ZipFile(applicationInfo.sourceDir);
+
+        // If the CRC of any of the dex files is different than what we have stored or the number of
+        // dex files are different, then force reload everything.
+        ArrayList<Long> dexCrcs = getAllDexCrcs(apk);
+        if (isAnyDexCrcDifferent(context, dexCrcs)) {
+            forceReload = true;
+        }
         try {
 
             int secondaryNumber = 2;
@@ -96,8 +112,7 @@ final class MultiDexExtractor {
 
                         // Create a zip file (extractedFile) containing only the secondary dex file
                         // (dexFile) from the apk.
-                        extract(apk, dexFile, extractedFile, extractedFilePrefix,
-                                lastModified);
+                        extract(apk, dexFile, extractedFile, extractedFilePrefix);
 
                         // Verify that the extracted file is indeed a zip file.
                         isExtractionSuccessful = verifyZipFile(extractedFile);
@@ -111,13 +126,18 @@ final class MultiDexExtractor {
                             extractedFile.delete();
                         }
                     }
-                    if (!isExtractionSuccessful) {
+                    if (isExtractionSuccessful) {
+                        // Write the current apk size and the dex crc's into the shared preferences
+                        putStoredApkSize(context, currentApkSize);
+                        putStoredDexCrcs(context, dexCrcs);
+                    } else {
                         throw new IOException("Could not create zip file " +
                                 extractedFile.getAbsolutePath() + " for secondary dex (" +
                                 secondaryNumber + ")");
                     }
                 } else {
-                    Log.i(TAG, "No extraction needed for " + extractedFile + " of size " + extractedFile.length());
+                    Log.i(TAG, "No extraction needed for " + extractedFile + " of size " +
+                            extractedFile.length());
                 }
                 secondaryNumber++;
                 dexFile = apk.getEntry(DEX_PREFIX + secondaryNumber + DEX_SUFFIX);
@@ -134,11 +154,93 @@ final class MultiDexExtractor {
     }
 
     /**
-     * This removes any old zip and dex files or extraneous files from the secondary-dexes
-     * directory.
+     * Iterate through the expected dex files, classes.dex, classes2.dex, classes3.dex, etc. and
+     * return the CRC of each zip entry in a list.
+     */
+    private static ArrayList<Long> getAllDexCrcs(ZipFile apk) {
+        ArrayList<Long> dexCrcs = new ArrayList<Long>();
+
+        // Add the first one
+        dexCrcs.add(apk.getEntry(DEX_PREFIX + DEX_SUFFIX).getCrc());
+
+        // Get the number of dex files in the apk.
+        int secondaryNumber = 2;
+        while (true) {
+            ZipEntry dexEntry = apk.getEntry(DEX_PREFIX + secondaryNumber + DEX_SUFFIX);
+            if (dexEntry == null) {
+                break;
+            }
+
+            dexCrcs.add(dexEntry.getCrc());
+            secondaryNumber++;
+        }
+        return dexCrcs;
+    }
+
+    /**
+     * Returns true if the number of dex files is different than what is stored in the shared
+     * preferences file or if any dex CRC value is different.
+     */
+    private static boolean isAnyDexCrcDifferent(Context context, ArrayList<Long> dexCrcs) {
+        final ArrayList<Long> storedDexCrcs = getStoredDexCrcs(context);
+
+        if (dexCrcs.size() != storedDexCrcs.size()) {
+            return true;
+        }
+
+        // We know the length of storedDexCrcs and dexCrcs are the same.
+        for (int i = 0; i < storedDexCrcs.size(); i++) {
+            if (storedDexCrcs.get(i) != dexCrcs.get(i)) {
+                return true;
+            }
+        }
+
+        // All the same
+        return false;
+    }
+
+    private static long getStoredApkSize(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_FILE, 0);
+        return prefs.getLong(KEY_APK_SIZE, -1L);
+    }
+
+    private static void putStoredApkSize(Context context, long apkSize) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_FILE, 0);
+        SharedPreferences.Editor edit = prefs.edit();
+        edit.putLong(KEY_APK_SIZE, apkSize);
+        apply(edit);
+    }
+
+    private static ArrayList<Long> getStoredDexCrcs(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_FILE, 0);
+        int numDexFiles = prefs.getInt(KEY_NUM_DEX_FILES, 0);
+        ArrayList<Long> dexCrcs = new ArrayList<Long>(numDexFiles);
+        for (int i = 0; i < numDexFiles; i++) {
+            dexCrcs.add(prefs.getLong(makeDexCrcKey(i), 0));
+        }
+        return dexCrcs;
+    }
+
+    private static void putStoredDexCrcs(Context context, ArrayList<Long> dexCrcs) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_FILE, 0);
+        SharedPreferences.Editor edit = prefs.edit();
+        edit.putInt(KEY_NUM_DEX_FILES, dexCrcs.size());
+        for (int i = 0; i < dexCrcs.size(); i++) {
+            edit.putLong(makeDexCrcKey(i), dexCrcs.get(i));
+        }
+        apply(edit);
+    }
+
+    private static String makeDexCrcKey(int i) {
+        return KEY_PREFIX_DEX_CRC + Integer.toString(i);
+    }
+
+    /**
+     * This always removes extraneous files.  If {@code removeAll} is true, then any existing
+     * zip and dex files are removed from the secondary-dexes directory.
      */
     private static void prepareDexDir(File dexDir, final String extractedFilePrefix,
-            final long sourceLastModified) throws IOException {
+            final boolean removeAll) throws IOException {
         dexDir.mkdir();
         if (!dexDir.isDirectory()) {
             throw new IOException("Failed to create dex directory " + dexDir.getPath());
@@ -149,8 +251,7 @@ final class MultiDexExtractor {
 
             @Override
             public boolean accept(File pathname) {
-                return (!pathname.getName().startsWith(extractedFilePrefix))
-                        || (pathname.lastModified() < sourceLastModified);
+                return removeAll || !pathname.getName().startsWith(extractedFilePrefix);
             }
         };
         File[] files = dexDir.listFiles(filter);
@@ -159,7 +260,8 @@ final class MultiDexExtractor {
             return;
         }
         for (File oldFile : files) {
-            Log.w(TAG, "Trying to delete old file " + oldFile.getPath() + " of size " + oldFile.length());
+            Log.w(TAG, "Trying to delete old file " + oldFile.getPath() + " of size " +
+                    oldFile.length());
             if (!oldFile.delete()) {
                 Log.w(TAG, "Failed to delete old file " + oldFile.getPath());
             } else {
@@ -169,8 +271,7 @@ final class MultiDexExtractor {
     }
 
     private static void extract(ZipFile apk, ZipEntry dexFile, File extractTo,
-            String extractedFilePrefix, long sourceLastModified)
-                    throws IOException, FileNotFoundException {
+            String extractedFilePrefix) throws IOException, FileNotFoundException {
 
         InputStream in = apk.getInputStream(dexFile);
         ZipOutputStream out = null;
@@ -194,10 +295,6 @@ final class MultiDexExtractor {
                 out.closeEntry();
             } finally {
                 out.close();
-            }
-            if (!tmp.setLastModified(sourceLastModified)) {
-                Log.e(TAG, "Failed to set time of \"" + tmp.getAbsolutePath() + "\"." +
-                        " This may cause problems with later updates of the apk.");
             }
             Log.i(TAG, "Renaming to " + extractTo.getPath());
             if (!tmp.renameTo(extractTo)) {
@@ -239,5 +336,31 @@ final class MultiDexExtractor {
         } catch (IOException e) {
             Log.w(TAG, "Failed to close resource", e);
         }
+    }
+
+    // The following is taken from SharedPreferencesCompat to avoid having a dependency of the
+    // multidex support library on another support library.
+    private static Method sApplyMethod;  // final
+    static {
+        try {
+            Class cls = SharedPreferences.Editor.class;
+            sApplyMethod = cls.getMethod("apply");
+        } catch (NoSuchMethodException unused) {
+            sApplyMethod = null;
+        }
+    }
+
+    private static void apply(SharedPreferences.Editor editor) {
+        if (sApplyMethod != null) {
+            try {
+                sApplyMethod.invoke(editor);
+                return;
+            } catch (InvocationTargetException unused) {
+                // fall through
+            } catch (IllegalAccessException unused) {
+                // fall through
+            }
+        }
+        editor.commit();
     }
 }
