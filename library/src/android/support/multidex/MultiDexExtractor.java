@@ -19,6 +19,7 @@ package android.support.multidex;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
+import android.os.Build;
 import android.util.Log;
 
 import java.io.BufferedOutputStream;
@@ -60,7 +61,6 @@ final class MultiDexExtractor {
     private static final int BUFFER_SIZE = 0x4000;
 
     private static final String PREFS_FILE = "multidex.version";
-    private static final String KEY_APK_SIZE = "apk_size";
     private static final String KEY_NUM_DEX_FILES = "num_dex";
     private static final String KEY_PREFIX_DEX_CRC = "crc";
 
@@ -77,11 +77,13 @@ final class MultiDexExtractor {
             boolean forceReload) throws IOException {
         Log.i(TAG, "load(" + applicationInfo.sourceDir + ", forceReload=" + forceReload + ")");
         final File sourceApk = new File(applicationInfo.sourceDir);
-        final long currentApkSize = sourceApk.length();
-        final boolean isNewApk = getStoredApkSize(context) != currentApkSize;
         final String extractedFilePrefix = sourceApk.getName() + EXTRACTED_NAME_EXT;
 
-        prepareDexDir(dexDir, extractedFilePrefix, isNewApk);
+        // Ensure that whatever deletions happen in prepareDexDir only happen if the zip that
+        // contains a secondary dex file in there is not consistent with the latest apk.  Otherwise,
+        // multi-process race conditions can cause a crash loop where one process deletes the zip
+        // while another had created it.
+        prepareDexDir(dexDir, extractedFilePrefix);
 
         final List<File> files = new ArrayList<File>();
         final ZipFile apk = new ZipFile(applicationInfo.sourceDir);
@@ -127,8 +129,7 @@ final class MultiDexExtractor {
                         }
                     }
                     if (isExtractionSuccessful) {
-                        // Write the current apk size and the dex crc's into the shared preferences
-                        putStoredApkSize(context, currentApkSize);
+                        // Write the dex crc's into the shared preferences
                         putStoredDexCrcs(context, dexCrcs);
                     } else {
                         throw new IOException("Could not create zip file " +
@@ -199,20 +200,8 @@ final class MultiDexExtractor {
         return false;
     }
 
-    private static long getStoredApkSize(Context context) {
-        SharedPreferences prefs = context.getSharedPreferences(PREFS_FILE, 0);
-        return prefs.getLong(KEY_APK_SIZE, -1L);
-    }
-
-    private static void putStoredApkSize(Context context, long apkSize) {
-        SharedPreferences prefs = context.getSharedPreferences(PREFS_FILE, 0);
-        SharedPreferences.Editor edit = prefs.edit();
-        edit.putLong(KEY_APK_SIZE, apkSize);
-        apply(edit);
-    }
-
     private static ArrayList<Long> getStoredDexCrcs(Context context) {
-        SharedPreferences prefs = context.getSharedPreferences(PREFS_FILE, 0);
+        SharedPreferences prefs = getMultiDexPreferences(context);
         int numDexFiles = prefs.getInt(KEY_NUM_DEX_FILES, 0);
         ArrayList<Long> dexCrcs = new ArrayList<Long>(numDexFiles);
         for (int i = 0; i < numDexFiles; i++) {
@@ -222,7 +211,7 @@ final class MultiDexExtractor {
     }
 
     private static void putStoredDexCrcs(Context context, ArrayList<Long> dexCrcs) {
-        SharedPreferences prefs = context.getSharedPreferences(PREFS_FILE, 0);
+        SharedPreferences prefs = getMultiDexPreferences(context);
         SharedPreferences.Editor edit = prefs.edit();
         edit.putInt(KEY_NUM_DEX_FILES, dexCrcs.size());
         for (int i = 0; i < dexCrcs.size(); i++) {
@@ -231,16 +220,22 @@ final class MultiDexExtractor {
         apply(edit);
     }
 
+    private static SharedPreferences getMultiDexPreferences(Context context) {
+        return context.getSharedPreferences(PREFS_FILE,
+                Build.VERSION.SDK_INT < Build.VERSION_CODES.HONEYCOMB
+                        ? Context.MODE_PRIVATE
+                        : Context.MODE_PRIVATE | Context.MODE_MULTI_PROCESS);
+    }
+
     private static String makeDexCrcKey(int i) {
         return KEY_PREFIX_DEX_CRC + Integer.toString(i);
     }
 
     /**
-     * This always removes extraneous files.  If {@code removeAll} is true, then any existing
-     * zip and dex files are removed from the secondary-dexes directory.
+     * This removes any files that do not have the correct prefix.
      */
-    private static void prepareDexDir(File dexDir, final String extractedFilePrefix,
-            final boolean removeAll) throws IOException {
+    private static void prepareDexDir(File dexDir, final String extractedFilePrefix)
+            throws IOException {
         dexDir.mkdir();
         if (!dexDir.isDirectory()) {
             throw new IOException("Failed to create dex directory " + dexDir.getPath());
@@ -251,7 +246,7 @@ final class MultiDexExtractor {
 
             @Override
             public boolean accept(File pathname) {
-                return removeAll || !pathname.getName().startsWith(extractedFilePrefix);
+                return !pathname.getName().startsWith(extractedFilePrefix);
             }
         };
         File[] files = dexDir.listFiles(filter);
