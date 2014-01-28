@@ -191,7 +191,7 @@ final class MultiDexExtractor {
 
         // We know the length of storedDexCrcs and dexCrcs are the same.
         for (int i = 0; i < storedDexCrcs.size(); i++) {
-            if (storedDexCrcs.get(i) != dexCrcs.get(i)) {
+            if (storedDexCrcs.get(i).longValue() != dexCrcs.get(i).longValue()) {
                 return true;
             }
         }
