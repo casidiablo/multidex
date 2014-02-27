@@ -16,7 +16,7 @@ LOCAL_PATH := $(call my-dir)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := android-support-multidex-instrumentation
-LOCAL_JAVA_LIBRARIES := android-support-multidex android-support-test
+LOCAL_JAVA_LIBRARIES := android-support-multidex
 LOCAL_SDK_VERSION := 4
 LOCAL_SRC_FILES := $(call all-java-files-under, src)
 include $(BUILD_STATIC_JAVA_LIBRARY)

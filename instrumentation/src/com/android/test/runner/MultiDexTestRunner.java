@@ -20,6 +20,9 @@ import android.os.Bundle;
 import android.support.multidex.MultiDex;
 import android.test.InstrumentationTestRunner;
 
+/**
+ * {@link InstrumentationTestRunner} for testing application needing multidex support.
+ */
 public class MultiDexTestRunner extends InstrumentationTestRunner {
 
     @Override
