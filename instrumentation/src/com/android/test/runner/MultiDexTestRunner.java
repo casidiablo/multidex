@@ -21,7 +21,7 @@ import android.support.multidex.MultiDex;
 import android.test.InstrumentationTestRunner;
 
 /**
- * {@link InstrumentationTestRunner} for testing application needing multidex support.
+ * {@link android.test.InstrumentationTestRunner} for testing application needing multidex support.
  */
 public class MultiDexTestRunner extends InstrumentationTestRunner {
 
