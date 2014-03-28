@@ -16,13 +16,13 @@
 
 package android.support.multidex;
 
-import dalvik.system.DexFile;
-
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.util.Log;
+
+import dalvik.system.DexFile;
 
 import java.io.File;
 import java.io.IOException;
@@ -78,6 +78,7 @@ public final class MultiDex {
      *         extension.
      */
     public static void install(Context context) {
+        Log.i(TAG, "install");
 
         if (Build.VERSION.SDK_INT < MIN_SDK_VERSION) {
             throw new RuntimeException("Multi dex installation failed. SDK " + Build.VERSION.SDK_INT
@@ -158,6 +159,7 @@ public final class MultiDex {
                     Log.w(TAG, "Files were not valid zip files.  Forcing a reload.");
                     // Try again, but this time force a reload of the zip file.
                     files = MultiDexExtractor.load(context, applicationInfo, dexDir, true);
+
                     if (checkValidZipFiles(files)) {
                         installSecondaryDexes(loader, dexDir, files);
                     } else {
@@ -171,6 +173,7 @@ public final class MultiDex {
             Log.e(TAG, "Multidex installation failure", e);
             throw new RuntimeException("Multi dex installation failed (" + e.getMessage() + ").");
         }
+        Log.i(TAG, "install done");
     }
 
     private static void installSecondaryDexes(ClassLoader loader, File dexDir, List<File> files)

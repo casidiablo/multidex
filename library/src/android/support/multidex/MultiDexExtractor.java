@@ -58,11 +58,17 @@ final class MultiDexExtractor {
     private static final String EXTRACTED_SUFFIX = ".zip";
     private static final int MAX_EXTRACT_ATTEMPTS = 3;
 
-    private static final int BUFFER_SIZE = 0x4000;
-
     private static final String PREFS_FILE = "multidex.version";
-    private static final String KEY_NUM_DEX_FILES = "num_dex";
-    private static final String KEY_PREFIX_DEX_CRC = "crc";
+    private static final String KEY_TIME_STAMP = "timestamp";
+    private static final String KEY_CRC = "crc";
+    private static final String KEY_DEX_NUMBER = "dex.number";
+
+    /**
+     * Size of reading buffers.
+     */
+    private static final int BUFFER_SIZE = 0x4000;
+    /* Keep value away from 0 because it is a too probable time stamp value */
+    private static final long NO_VALUE = -1L;
 
     /**
      * Extracts application secondary dexes into files in the application data
@@ -75,8 +81,87 @@ final class MultiDexExtractor {
      */
     static List<File> load(Context context, ApplicationInfo applicationInfo, File dexDir,
             boolean forceReload) throws IOException {
-        Log.i(TAG, "load(" + applicationInfo.sourceDir + ", forceReload=" + forceReload + ")");
+        Log.i(TAG, "MultiDexExtractor.load(" + applicationInfo.sourceDir + ", " + forceReload + ")");
         final File sourceApk = new File(applicationInfo.sourceDir);
+
+        File archive = new File(applicationInfo.sourceDir);
+        long currentCrc = getZipCrc(archive);
+
+        List<File> files;
+        if (!forceReload && !isModified(context, archive, currentCrc)) {
+            try {
+                files = loadExistingExtractions(context, sourceApk, dexDir);
+            } catch (IOException ioe) {
+                Log.w(TAG, "Failed to reload existing extracted secondary dex files,"
+                        + " falling back to fresh extraction", ioe);
+                files = performExtractions(sourceApk, dexDir);
+                putStoredApkInfo(context, getTimeStamp(sourceApk), currentCrc, files.size() + 1);
+
+            }
+        } else {
+            Log.i(TAG, "Detected that extraction must be performed.");
+            files = performExtractions(sourceApk, dexDir);
+            putStoredApkInfo(context, getTimeStamp(sourceApk), currentCrc, files.size() + 1);
+        }
+
+        Log.i(TAG, "load found " + files.size() + " secondary dex files");
+        return files;
+    }
+
+    private static List<File> loadExistingExtractions(Context context, File sourceApk, File dexDir)
+            throws IOException {
+        Log.i(TAG, "loading existing secondary dex files");
+
+        final String extractedFilePrefix = sourceApk.getName() + EXTRACTED_NAME_EXT;
+        int totalDexNumber = getMultiDexPreferences(context).getInt(KEY_DEX_NUMBER, 1);
+        final List<File> files = new ArrayList<File>(totalDexNumber);
+
+        for (int secondaryNumber = 2; secondaryNumber <= totalDexNumber; secondaryNumber++) {
+            String fileName = extractedFilePrefix + secondaryNumber + EXTRACTED_SUFFIX;
+            File extractedFile = new File(dexDir, fileName);
+            if (extractedFile.isFile()) {
+                files.add(extractedFile);
+                if (!verifyZipFile(extractedFile)) {
+                    Log.i(TAG, "Invalid zip file: " + extractedFile);
+                    throw new IOException("Invalid ZIP file.");
+                }
+            } else {
+                throw new IOException("Missing extracted secondary dex file '" +
+                        extractedFile.getPath() + "'");
+            }
+        }
+
+        return files;
+    }
+
+    private static boolean isModified(Context context, File archive, long currentCrc) {
+        SharedPreferences prefs = getMultiDexPreferences(context);
+        return (prefs.getLong(KEY_TIME_STAMP, NO_VALUE) != getTimeStamp(archive))
+                || (prefs.getLong(KEY_CRC, NO_VALUE) != currentCrc);
+    }
+
+    private static long getTimeStamp(File archive) {
+        long timeStamp = archive.lastModified();
+        if (timeStamp == NO_VALUE) {
+            // never return NO_VALUE
+            timeStamp--;
+        }
+        return timeStamp;
+    }
+
+
+    private static long getZipCrc(File archive) throws IOException {
+        long computedValue = ZipUtil.getZipCrc(archive);
+        if (computedValue == NO_VALUE) {
+            // never return NO_VALUE
+            computedValue--;
+        }
+        return computedValue;
+    }
+
+    private static List<File> performExtractions(File sourceApk, File dexDir)
+            throws IOException {
+
         final String extractedFilePrefix = sourceApk.getName() + EXTRACTED_NAME_EXT;
 
         // Ensure that whatever deletions happen in prepareDexDir only happen if the zip that
@@ -85,15 +170,9 @@ final class MultiDexExtractor {
         // while another had created it.
         prepareDexDir(dexDir, extractedFilePrefix);
 
-        final List<File> files = new ArrayList<File>();
-        final ZipFile apk = new ZipFile(applicationInfo.sourceDir);
+        List<File> files = new ArrayList<File>();
 
-        // If the CRC of any of the dex files is different than what we have stored or the number of
-        // dex files are different, then force reload everything.
-        ArrayList<Long> dexCrcs = getAllDexCrcs(apk);
-        if (isAnyDexCrcDifferent(context, dexCrcs)) {
-            forceReload = true;
-        }
+        final ZipFile apk = new ZipFile(sourceApk);
         try {
 
             int secondaryNumber = 2;
@@ -104,41 +183,36 @@ final class MultiDexExtractor {
                 File extractedFile = new File(dexDir, fileName);
                 files.add(extractedFile);
 
-                Log.i(TAG, "Need extracted file " + extractedFile);
-                if (forceReload || !extractedFile.isFile()) {
-                    Log.i(TAG, "Extraction is needed for file " + extractedFile);
-                    int numAttempts = 0;
-                    boolean isExtractionSuccessful = false;
-                    while (numAttempts < MAX_EXTRACT_ATTEMPTS && !isExtractionSuccessful) {
-                        numAttempts++;
+                Log.i(TAG, "Extraction is needed for file " + extractedFile);
+                int numAttempts = 0;
+                boolean isExtractionSuccessful = false;
+                while (numAttempts < MAX_EXTRACT_ATTEMPTS && !isExtractionSuccessful) {
+                    numAttempts++;
 
-                        // Create a zip file (extractedFile) containing only the secondary dex file
-                        // (dexFile) from the apk.
-                        extract(apk, dexFile, extractedFile, extractedFilePrefix);
+                    // Create a zip file (extractedFile) containing only the secondary dex file
+                    // (dexFile) from the apk.
+                    extract(apk, dexFile, extractedFile, extractedFilePrefix);
 
-                        // Verify that the extracted file is indeed a zip file.
-                        isExtractionSuccessful = verifyZipFile(extractedFile);
+                    // Verify that the extracted file is indeed a zip file.
+                    isExtractionSuccessful = verifyZipFile(extractedFile);
 
-                        // Log the sha1 of the extracted zip file
-                        Log.i(TAG, "Extraction " + (isExtractionSuccessful ? "success" : "failed") +
-                                " - length " + extractedFile.getAbsolutePath() + ": " +
-                                extractedFile.length());
-                        if (!isExtractionSuccessful) {
-                            // Delete the extracted file
-                            extractedFile.delete();
+                    // Log the sha1 of the extracted zip file
+                    Log.i(TAG, "Extraction " + (isExtractionSuccessful ? "success" : "failed") +
+                            " - length " + extractedFile.getAbsolutePath() + ": " +
+                            extractedFile.length());
+                    if (!isExtractionSuccessful) {
+                        // Delete the extracted file
+                        extractedFile.delete();
+                        if (extractedFile.exists()) {
+                            Log.w(TAG, "Failed to delete corrupted secondary dex '" +
+                                    extractedFile.getPath() + "'");
                         }
                     }
-                    if (isExtractionSuccessful) {
-                        // Write the dex crc's into the shared preferences
-                        putStoredDexCrcs(context, dexCrcs);
-                    } else {
-                        throw new IOException("Could not create zip file " +
-                                extractedFile.getAbsolutePath() + " for secondary dex (" +
-                                secondaryNumber + ")");
-                    }
-                } else {
-                    Log.i(TAG, "No extraction needed for " + extractedFile + " of size " +
-                            extractedFile.length());
+                }
+                if (!isExtractionSuccessful) {
+                    throw new IOException("Could not create zip file " +
+                            extractedFile.getAbsolutePath() + " for secondary dex (" +
+                            secondaryNumber + ")");
                 }
                 secondaryNumber++;
                 dexFile = apk.getEntry(DEX_PREFIX + secondaryNumber + DEX_SUFFIX);
@@ -154,69 +228,17 @@ final class MultiDexExtractor {
         return files;
     }
 
-    /**
-     * Iterate through the expected dex files, classes.dex, classes2.dex, classes3.dex, etc. and
-     * return the CRC of each zip entry in a list.
-     */
-    private static ArrayList<Long> getAllDexCrcs(ZipFile apk) {
-        ArrayList<Long> dexCrcs = new ArrayList<Long>();
-
-        // Add the first one
-        dexCrcs.add(apk.getEntry(DEX_PREFIX + DEX_SUFFIX).getCrc());
-
-        // Get the number of dex files in the apk.
-        int secondaryNumber = 2;
-        while (true) {
-            ZipEntry dexEntry = apk.getEntry(DEX_PREFIX + secondaryNumber + DEX_SUFFIX);
-            if (dexEntry == null) {
-                break;
-            }
-
-            dexCrcs.add(dexEntry.getCrc());
-            secondaryNumber++;
-        }
-        return dexCrcs;
-    }
-
-    /**
-     * Returns true if the number of dex files is different than what is stored in the shared
-     * preferences file or if any dex CRC value is different.
-     */
-    private static boolean isAnyDexCrcDifferent(Context context, ArrayList<Long> dexCrcs) {
-        final ArrayList<Long> storedDexCrcs = getStoredDexCrcs(context);
-
-        if (dexCrcs.size() != storedDexCrcs.size()) {
-            return true;
-        }
-
-        // We know the length of storedDexCrcs and dexCrcs are the same.
-        for (int i = 0; i < storedDexCrcs.size(); i++) {
-            if (storedDexCrcs.get(i).longValue() != dexCrcs.get(i).longValue()) {
-                return true;
-            }
-        }
-
-        // All the same
-        return false;
-    }
-
-    private static ArrayList<Long> getStoredDexCrcs(Context context) {
-        SharedPreferences prefs = getMultiDexPreferences(context);
-        int numDexFiles = prefs.getInt(KEY_NUM_DEX_FILES, 0);
-        ArrayList<Long> dexCrcs = new ArrayList<Long>(numDexFiles);
-        for (int i = 0; i < numDexFiles; i++) {
-            dexCrcs.add(prefs.getLong(makeDexCrcKey(i), 0));
-        }
-        return dexCrcs;
-    }
-
-    private static void putStoredDexCrcs(Context context, ArrayList<Long> dexCrcs) {
+    private static void putStoredApkInfo(Context context, long timeStamp, long crc,
+            int totalDexNumber) {
         SharedPreferences prefs = getMultiDexPreferences(context);
         SharedPreferences.Editor edit = prefs.edit();
-        edit.putInt(KEY_NUM_DEX_FILES, dexCrcs.size());
-        for (int i = 0; i < dexCrcs.size(); i++) {
-            edit.putLong(makeDexCrcKey(i), dexCrcs.get(i));
-        }
+        edit.putLong(KEY_TIME_STAMP, timeStamp);
+        edit.putLong(KEY_CRC, crc);
+        /* SharedPreferences.Editor doc says that apply() and commit() "atomically performs the
+         * requested modifications" it should be OK to rely on saving the dex files number (getting
+         * old number value would go along with old crc and time stamp).
+         */
+        edit.putInt(KEY_DEX_NUMBER, totalDexNumber);
         apply(edit);
     }
 
@@ -225,10 +247,6 @@ final class MultiDexExtractor {
                 Build.VERSION.SDK_INT < Build.VERSION_CODES.HONEYCOMB
                         ? Context.MODE_PRIVATE
                         : Context.MODE_PRIVATE | Context.MODE_MULTI_PROCESS);
-    }
-
-    private static String makeDexCrcKey(int i) {
-        return KEY_PREFIX_DEX_CRC + Integer.toString(i);
     }
 
     /**
@@ -338,7 +356,7 @@ final class MultiDexExtractor {
     private static Method sApplyMethod;  // final
     static {
         try {
-            Class cls = SharedPreferences.Editor.class;
+            Class<?> cls = SharedPreferences.Editor.class;
             sApplyMethod = cls.getMethod("apply");
         } catch (NoSuchMethodException unused) {
             sApplyMethod = null;
