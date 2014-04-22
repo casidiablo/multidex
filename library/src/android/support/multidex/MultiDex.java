@@ -37,6 +37,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.ZipFile;
 
 /**
@@ -48,9 +50,8 @@ import java.util.zip.ZipFile;
  * {@link #install(Context)}.
  *
  * <p/>
- * <strong>IMPORTANT:</strong>This library provides compatibility for platforms
- * with API level 4 through 20. This library does nothing on newer versions of
- * the platform which provide built-in support for secondary dex files.
+ * This library provides compatibility for platforms with API level 4 through 20. This library does
+ * nothing on newer versions of the platform which provide built-in support for secondary dex files.
  */
 public final class MultiDex {
 
@@ -58,11 +59,18 @@ public final class MultiDex {
 
     private static final String SECONDARY_FOLDER_NAME = "secondary-dexes";
 
-    private static final int SUPPORTED_MULTIDEX_SDK_VERSION = 21;
+    private static final int MAX_SUPPORTED_SDK_VERSION = 20;
 
     private static final int MIN_SDK_VERSION = 4;
 
+    private static final int VM_WITH_MULTIDEX_VERSION_MAJOR = 2;
+
+    private static final int VM_WITH_MULTIDEX_VERSION_MINOR = 1;
+
     private static final Set<String> installedApk = new HashSet<String>();
+
+    private static final boolean IS_VM_MULTIDEX_CAPABLE =
+            isVMMultidexCapable(System.getProperty("java.vm.version"));
 
     private MultiDex() {}
 
@@ -78,12 +86,15 @@ public final class MultiDex {
      */
     public static void install(Context context) {
         Log.i(TAG, "install");
+        if (IS_VM_MULTIDEX_CAPABLE) {
+            Log.i(TAG, "VM has multidex support, MultiDex support library is disabled.");
+            return;
+        }
 
         if (Build.VERSION.SDK_INT < MIN_SDK_VERSION) {
             throw new RuntimeException("Multi dex installation failed. SDK " + Build.VERSION.SDK_INT
                     + " is unsupported. Min SDK version is " + MIN_SDK_VERSION + ".");
         }
-
 
         try {
             PackageManager pm;
@@ -118,11 +129,13 @@ public final class MultiDex {
                 }
                 installedApk.add(apkPath);
 
-                if (Build.VERSION.SDK_INT >= SUPPORTED_MULTIDEX_SDK_VERSION) {
-                    // STOPSHIP: Any app that uses this class needs approval before being released
-                    // as well as figuring out what the right behavior should be here.
-                    throw new RuntimeException("Platform support of multidex for SDK " +
-                            Build.VERSION.SDK_INT + " has not been confirmed yet.");
+                if (Build.VERSION.SDK_INT > MAX_SUPPORTED_SDK_VERSION) {
+                    Log.w(TAG, "MultiDex is not guaranteed to work in SDK version "
+                            + Build.VERSION.SDK_INT + ": SDK version higher than "
+                            + MAX_SUPPORTED_SDK_VERSION + " should be backed by "
+                            + "runtime with built-in multidex capabilty but it's not the "
+                            + "case here: java.vm.version=\""
+                            + System.getProperty("java.vm.version") + "\"");
                 }
 
                 /* The patched class loader is expected to be a descendant of
@@ -173,6 +186,35 @@ public final class MultiDex {
             throw new RuntimeException("Multi dex installation failed (" + e.getMessage() + ").");
         }
         Log.i(TAG, "install done");
+    }
+
+    /**
+     * Identifies if the current VM has a native support for multidex, meaning there is no need for
+     * additional installation by this library.
+     * @return true if the VM handles multidex
+     */
+    /* package visible for test */
+    static boolean isVMMultidexCapable(String versionString) {
+        boolean isMultidexCapable = false;
+        if (versionString != null) {
+            Matcher matcher = Pattern.compile("(\\d+)\\.(\\d+)(\\.\\d+)?").matcher(versionString);
+            if (matcher.matches()) {
+                try {
+                    int major = Integer.parseInt(matcher.group(1));
+                    int minor = Integer.parseInt(matcher.group(2));
+                    isMultidexCapable = (major > VM_WITH_MULTIDEX_VERSION_MAJOR)
+                            || ((major == VM_WITH_MULTIDEX_VERSION_MAJOR)
+                                    && (minor >= VM_WITH_MULTIDEX_VERSION_MINOR));
+                } catch (NumberFormatException e) {
+                    // let isMultidexCapable be false
+                }
+            }
+        }
+        Log.i(TAG, "VM with version " + versionString +
+                (isMultidexCapable ?
+                        " has multidex support" :
+                        " does not have multidex support"));
+        return isMultidexCapable;
     }
 
     private static void installSecondaryDexes(ClassLoader loader, File dexDir, List<File> files)
