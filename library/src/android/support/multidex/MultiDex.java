@@ -48,7 +48,7 @@ import java.util.zip.ZipFile;
  *
  * <p/>
  * <strong>IMPORTANT:</strong>This library provides compatibility for platforms
- * with API level 4 through 19. This library does nothing on newer versions of
+ * with API level 4 through 20. This library does nothing on newer versions of
  * the platform which provide built-in support for secondary dex files.
  */
 public final class MultiDex {
@@ -57,7 +57,7 @@ public final class MultiDex {
 
     private static final String SECONDARY_FOLDER_NAME = "secondary-dexes";
 
-    private static final int SUPPORTED_MULTIDEX_SDK_VERSION = 20;
+    private static final int SUPPORTED_MULTIDEX_SDK_VERSION = 21;
 
     private static final int MIN_SDK_VERSION = 4;
 
