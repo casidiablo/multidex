@@ -16,6 +16,7 @@
 
 package android.support.multidex;
 
+import android.app.Application;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
@@ -41,9 +42,9 @@ import java.util.zip.ZipFile;
 /**
  * Monkey patches {@link Context#getClassLoader() the application context class
  * loader} in order to load classes from more than one dex file. The primary
- * {@code classes.dex} file necessary for calling this class methods. secondary
- * dex files named classes2.dex, classes".dex... found in the application apk
- * will be added to the classloader after first call to
+ * {@code classes.dex} must contain the classes necessary for calling this
+ * class methods. Secondary dex files named classes2.dex, classes3.dex... found
+ * in the application apk will be added to the classloader after first call to
  * {@link #install(Context)}.
  *
  * <p/>
@@ -67,11 +68,9 @@ public final class MultiDex {
 
     /**
      * Patches the application context class loader by appending extra dex files
-     * loaded from the application apk. Call this method first thing in your
-     * {@code Application#OnCreate}, {@code Instrumentation#OnCreate},
-     * {@code BackupAgent#OnCreate}, {@code Service#OnCreate},
-     * {@code BroadcastReceiver#onReceive}, {@code Activity#OnCreate} and
-     * {@code ContentProvider#OnCreate} .
+     * loaded from the application apk. This method should be called in the
+     * attachBaseContext of your {@link Application}, see
+     * {@link MultiDexApplication} for more explanation and an example.
      *
      * @param context application context.
      * @throws RuntimeException if an error occurred preventing the classloader
