@@ -20,6 +20,7 @@ import android.app.Application;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.PackageManager.NameNotFoundException;
 import android.os.Build;
 import android.util.Log;
 
@@ -88,6 +89,12 @@ public final class MultiDex {
         Log.i(TAG, "install");
         if (IS_VM_MULTIDEX_CAPABLE) {
             Log.i(TAG, "VM has multidex support, MultiDex support library is disabled.");
+            try {
+                clearOldDexDir(context);
+            } catch (Throwable t) {
+                Log.w(TAG, "Something went wrong when trying to clear old MultiDex extraction, "
+                        + "continuing without cleaning.", t);
+            }
             return;
         }
 
@@ -97,28 +104,9 @@ public final class MultiDex {
         }
 
         try {
-            PackageManager pm;
-            String packageName;
-            try {
-                pm = context.getPackageManager();
-                packageName = context.getPackageName();
-            } catch (RuntimeException e) {
-                /* Ignore those exceptions so that we don't break tests relying on Context like
-                 * a android.test.mock.MockContext or a android.content.ContextWrapper with a null
-                 * base Context.
-                 */
-                Log.w(TAG, "Failure while trying to obtain ApplicationInfo from Context. " +
-                        "Must be running in test mode. Skip patching.", e);
-                return;
-            }
-            if (pm == null || packageName == null) {
-                // This is most likely a mock context, so just return without patching.
-                return;
-            }
-            ApplicationInfo applicationInfo =
-                    pm.getApplicationInfo(packageName, PackageManager.GET_META_DATA);
+            ApplicationInfo applicationInfo = getApplicationInfo(context);
             if (applicationInfo == null) {
-                // This is from a mock context, so just return without patching.
+                // Looks like running on a test Context, so just return without patching.
                 return;
             }
 
@@ -186,6 +174,31 @@ public final class MultiDex {
             throw new RuntimeException("Multi dex installation failed (" + e.getMessage() + ").");
         }
         Log.i(TAG, "install done");
+    }
+
+    private static ApplicationInfo getApplicationInfo(Context context)
+            throws NameNotFoundException {
+        PackageManager pm;
+        String packageName;
+        try {
+            pm = context.getPackageManager();
+            packageName = context.getPackageName();
+        } catch (RuntimeException e) {
+            /* Ignore those exceptions so that we don't break tests relying on Context like
+             * a android.test.mock.MockContext or a android.content.ContextWrapper with a null
+             * base Context.
+             */
+            Log.w(TAG, "Failure while trying to obtain ApplicationInfo from Context. " +
+                    "Must be running in test mode. Skip patching.", e);
+            return null;
+        }
+        if (pm == null || packageName == null) {
+            // This is most likely a mock context, so just return without patching.
+            return null;
+        }
+        ApplicationInfo applicationInfo =
+                pm.getApplicationInfo(packageName, PackageManager.GET_META_DATA);
+        return applicationInfo;
     }
 
     /**
@@ -318,6 +331,45 @@ public final class MultiDex {
         System.arraycopy(original, 0, combined, 0, original.length);
         System.arraycopy(extraElements, 0, combined, original.length, extraElements.length);
         jlrField.set(instance, combined);
+    }
+
+    private static void clearOldDexDir(Context context) throws Exception {
+        ApplicationInfo applicationInfo = getApplicationInfo(context);
+        if (applicationInfo == null) {
+            // Looks like running on a test Context, so just return.
+            return;
+        }
+
+        synchronized (installedApk) {
+            String apkPath = applicationInfo.sourceDir;
+            if (installedApk.contains(apkPath)) {
+                return;
+            }
+            installedApk.add(apkPath);
+        }
+        File dexDir = new File(context.getFilesDir(), SECONDARY_FOLDER_NAME);
+        if (dexDir.isDirectory()) {
+            Log.i(TAG, "Clearing old secondary dex dir (" + dexDir.getPath() + ").");
+            File[] files = dexDir.listFiles();
+            if (files == null) {
+                Log.w(TAG, "Failed to list secondary dex dir content (" + dexDir.getPath() + ").");
+                return;
+            }
+            for (File oldFile : files) {
+                Log.i(TAG, "Trying to delete old file " + oldFile.getPath() + " of size "
+                        + oldFile.length());
+                if (!oldFile.delete()) {
+                    Log.w(TAG, "Failed to delete old file " + oldFile.getPath());
+                } else {
+                    Log.i(TAG, "Deleted old file " + oldFile.getPath());
+                }
+            }
+            if (!dexDir.delete()) {
+                Log.w(TAG, "Failed to delete secondary dex dir " + dexDir.getPath());
+            } else {
+                Log.i(TAG, "Deleted old secondary dex dir " + dexDir.getPath());
+            }
+        }
     }
 
     /**

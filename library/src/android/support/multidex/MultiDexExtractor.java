@@ -273,12 +273,12 @@ final class MultiDexExtractor {
             return;
         }
         for (File oldFile : files) {
-            Log.w(TAG, "Trying to delete old file " + oldFile.getPath() + " of size " +
+            Log.i(TAG, "Trying to delete old file " + oldFile.getPath() + " of size " +
                     oldFile.length());
             if (!oldFile.delete()) {
                 Log.w(TAG, "Failed to delete old file " + oldFile.getPath());
             } else {
-                Log.w(TAG, "Deleted old file " + oldFile.getPath());
+                Log.i(TAG, "Deleted old file " + oldFile.getPath());
             }
         }
     }
