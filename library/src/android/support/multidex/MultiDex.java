@@ -58,7 +58,10 @@ public final class MultiDex {
 
     static final String TAG = "MultiDex";
 
-    private static final String SECONDARY_FOLDER_NAME = "secondary-dexes";
+    private static final String OLD_SECONDARY_FOLDER_NAME = "secondary-dexes";
+
+    private static final String SECONDARY_FOLDER_NAME = "code_cache" + File.separator +
+        "secondary-dexes";
 
     private static final int MAX_SUPPORTED_SDK_VERSION = 20;
 
@@ -89,12 +92,6 @@ public final class MultiDex {
         Log.i(TAG, "install");
         if (IS_VM_MULTIDEX_CAPABLE) {
             Log.i(TAG, "VM has multidex support, MultiDex support library is disabled.");
-            try {
-                clearOldDexDir(context);
-            } catch (Throwable t) {
-                Log.w(TAG, "Something went wrong when trying to clear old MultiDex extraction, "
-                        + "continuing without cleaning.", t);
-            }
             return;
         }
 
@@ -151,7 +148,14 @@ public final class MultiDex {
                     return;
                 }
 
-                File dexDir = new File(context.getFilesDir(), SECONDARY_FOLDER_NAME);
+                try {
+                  clearOldDexDir(context);
+                } catch (Throwable t) {
+                  Log.w(TAG, "Something went wrong when trying to clear old MultiDex extraction, "
+                      + "continuing without cleaning.", t);
+                }
+
+                File dexDir = new File(applicationInfo.dataDir, SECONDARY_FOLDER_NAME);
                 List<File> files = MultiDexExtractor.load(context, applicationInfo, dexDir, false);
                 if (checkValidZipFiles(files)) {
                     installSecondaryDexes(loader, dexDir, files);
@@ -334,20 +338,7 @@ public final class MultiDex {
     }
 
     private static void clearOldDexDir(Context context) throws Exception {
-        ApplicationInfo applicationInfo = getApplicationInfo(context);
-        if (applicationInfo == null) {
-            // Looks like running on a test Context, so just return.
-            return;
-        }
-
-        synchronized (installedApk) {
-            String apkPath = applicationInfo.sourceDir;
-            if (installedApk.contains(apkPath)) {
-                return;
-            }
-            installedApk.add(apkPath);
-        }
-        File dexDir = new File(context.getFilesDir(), SECONDARY_FOLDER_NAME);
+        File dexDir = new File(context.getFilesDir(), OLD_SECONDARY_FOLDER_NAME);
         if (dexDir.isDirectory()) {
             Log.i(TAG, "Clearing old secondary dex dir (" + dexDir.getPath() + ").");
             File[] files = dexDir.listFiles();

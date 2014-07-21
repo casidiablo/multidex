@@ -84,11 +84,10 @@ final class MultiDexExtractor {
         Log.i(TAG, "MultiDexExtractor.load(" + applicationInfo.sourceDir + ", " + forceReload + ")");
         final File sourceApk = new File(applicationInfo.sourceDir);
 
-        File archive = new File(applicationInfo.sourceDir);
-        long currentCrc = getZipCrc(archive);
+        long currentCrc = getZipCrc(sourceApk);
 
         List<File> files;
-        if (!forceReload && !isModified(context, archive, currentCrc)) {
+        if (!forceReload && !isModified(context, sourceApk, currentCrc)) {
             try {
                 files = loadExistingExtractions(context, sourceApk, dexDir);
             } catch (IOException ioe) {
@@ -254,7 +253,7 @@ final class MultiDexExtractor {
      */
     private static void prepareDexDir(File dexDir, final String extractedFilePrefix)
             throws IOException {
-        dexDir.mkdir();
+        dexDir.mkdirs();
         if (!dexDir.isDirectory()) {
             throw new IOException("Failed to create dex directory " + dexDir.getPath());
         }
