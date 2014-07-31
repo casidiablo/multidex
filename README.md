@@ -80,3 +80,49 @@ And pass the path of this file to the `--main-dex-list` option of the `dx` utili
 Since the `dx` utility is not currently configurable from the Android plugin for
 Gradle you will have to add this options manually to the dx script (e.g.
 edit `$ANDROID_HOME/build-tools/19.1.0/dx`)
+
+### `build.gradle` example
+
+```groovy
+buildscript {
+    repositories {
+        mavenCentral()
+        maven {
+            url 'http://saturday06.github.io/gradle-android-scala-plugin/repository/snapshot'
+        }
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:0.12.2'
+        classpath 'jp.leafytree.gradle:gradle-android-scala-plugin:1.0-SNAPSHOT'
+    }
+}
+
+apply plugin: 'com.android.application'
+apply plugin: 'android-scala'
+
+repositories {
+    mavenCentral()
+    jcenter()
+}
+
+android {
+    compileSdkVersion 19
+    buildToolsVersion '20' // tested on 19.x family too
+
+    defaultConfig {
+        applicationId 'some.app'
+        minSdkVersion 19
+        targetSdkVersion 19
+        versionCode 1
+        versionName '1.0'
+    }
+}
+
+dependencies {
+    compile 'com.google.android:multidex:0.1'
+    compile 'com.android.support:support-v4:19.0.1'
+    compile 'com.google.android.gms:play-services:5.0.77'
+    compile 'org.scala-lang:scala-library:2.11.2'
+    compile 'org.scaloid:scaloid_2.11:3.4-10'
+}
+```
