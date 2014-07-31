@@ -1,9 +1,10 @@
-### android.support.multidex
+`android.support.multidex`
+--------------------------
 
 Library Project including compatibility multi dex loader.
 
 This can be used by an Android project to install classloader
-with multiple dex of applications running on API 14+.
+with multiple dex of applications running on API 4+.
 
 ### What's this?
 
@@ -14,13 +15,18 @@ repo for easy consumption.
 ### What's it for again?
 
 While dexing classes it is sometimes possible to exceed the maximum (65536) methods
-limit (try using Google Play Services and Scaloid for instance).
+limit (try using Google Play Services and Scaloid for instance):
 
-A workaround is to use the `--multi-dex` option of the `dx` utility; this will
-generate several dex files (classes.dex, classes2.dex, etc.) that will be
-included in the APK.
+```
+trouble writing output: Too many method references: 70820; max is 65536.
+You may try using --multi-dex option.
+```
 
-By default Dalvik's classloader will look for the classes.dex file only, so
+So the suggestion is to use the `--multi-dex` option of the `dx` utility; this
+will generate several dex files (`classes.dex`, `classes2.dex`, etc.) that will
+be included in the APK.
+
+By default Dalvik's classloader will look for the `classes.dex` file only, so
 it's necessary to patch it so that it can read from multiple dex files. That's
 what this project provides.
 
@@ -42,7 +48,7 @@ Then you have 3 possibilities:
 
 - Declare `android.support.multidex.MultiDexApplication` as the application in
 your `AndroidManifest.xml`
-- Have your `Application` extends `android.support.multidex.MultiDexApplication`
+- Have your `Application` extends `android.support.multidex.MultiDexApplication`, or...
 - Have your `Application` override `attachBaseContext` starting with:
 
 ```java
@@ -52,7 +58,7 @@ protected void attachBaseContext(Context base) {
 ```
 
 If you are unlucky enough, the multidex classes will not be included in the
-classes.dex file (the first one readed by the classloader), which in turn
+`classes.dex` file (the first one read by the classloader), which in turn
 will render all this useless. There's a workaround for this though. Create a file
 with this content:
 
@@ -73,4 +79,4 @@ And pass the path of this file to the `--main-dex-list` option of the `dx` utili
 
 Since the `dx` utility is not currently configurable from the Android plugin for
 Gradle you will have to add this options manually to the dx script (e.g.
-edit `build-tools/19.1.0/dx`)
+edit `$ANDROID_HOME/build-tools/19.1.0/dx`)
