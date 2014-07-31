@@ -70,3 +70,7 @@ android/support/multidex/ZipUtil.class
 ```
 
 And pass the path of this file to the `--main-dex-list` option of the `dx` utility.
+
+Since the `dx` utility is not currently configurable from the Android plugin for
+Gradle you will have to add this options manually to the dx script (e.g.
+edit `build-tools/19.1.0/dx`)
