@@ -1,0 +1,32 @@
+.gradle*
+rebel.xml
+build/
+
+# Eclipse
+*.launch
+.project
+.metadata
+.springBeans
+.classpath
+.settings/
+bin/
+
+# IntelliJ
+*.iml
+*.ipr
+*.iws
+.idea/
+out/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Icon?
+ehthumbs.db
+Thumbs.db
+
+#android
+local.properties

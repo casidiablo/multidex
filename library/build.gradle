@@ -1,6 +1,27 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        jcenter()
+    }
+    dependencies {
+        classpath 'com.jakewharton.sdkmanager:gradle-plugin:0.12.0'
+        classpath 'com.android.tools.build:gradle:0.12.2'
+        classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:0.5'
+    }
+}
+
+apply plugin: 'android-sdk-manager'
 apply plugin: 'android-library'
+apply plugin: 'com.jfrog.bintray'
+apply plugin: 'maven-publish'
+
+group = 'com.google.android'
+version=0.1
 
 android {
+    compileSdkVersion 19
+    buildToolsVersion "19.1.0"
+
     sourceSets {
         main {
             java.srcDirs         = ['src']
@@ -15,3 +36,38 @@ android {
         abortOnError false
     }
 }
+
+task sourceJar(type: Jar) {
+  from android.sourceSets.main.java.srcDirs
+}
+
+aarArtifact = new Object() {
+  String toString() {
+    'build/outputs/aar/multidex-0.1.aar'
+  }
+}
+
+publishing {
+  publications {
+    multidexLibrary(MavenPublication) {
+      artifact aarArtifact
+
+      artifact sourceJar {
+        classifier 'sources'
+      }
+    }
+  }
+}
+
+bintray {
+  user = 'casidiablo'
+  key = bitrayApiKey
+  publications = ['multidexLibrary']
+  pkg {
+    repo = 'android'
+    name = 'multidex'
+    licenses = ['Apache 2.0']
+  }
+}
+
+tasks.bintrayUpload.dependsOn tasks.publishToMavenLocal
