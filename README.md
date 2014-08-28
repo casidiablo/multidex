@@ -24,7 +24,10 @@ You may try using --multi-dex option.
 
 So the suggestion is to use the `--multi-dex` option of the `dx` utility; this
 will generate several dex files (`classes.dex`, `classes2.dex`, etc.) that will
-be included in the APK.
+be included in the APK. Since the `dx` utility is not currently configurable
+from the Android plugin for Gradle you will have to add this options manually
+to the dx script (e.g. edit `$ANDROID_HOME/build-tools/19.1.0/dx`; in my case
+the last line looks like this: `exec java $javaOpts -jar "$jarpath" --multi-dex "$@"`)
 
 By default Dalvik's classloader will look for the `classes.dex` file only, so
 it's necessary to patch it so that it can read from multiple dex files. That's
