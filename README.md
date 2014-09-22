@@ -66,6 +66,11 @@ your `AndroidManifest.xml`
 - Have your `Application` override `attachBaseContext` starting with:
 
 ```java
+import android.support.multidex.MultiDex;
+
+// ...
+
+@Override
 protected void attachBaseContext(Context base) {
   super.attachBaseContext(base);
   MultiDex.install(this);
