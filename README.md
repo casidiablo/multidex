@@ -24,10 +24,21 @@ You may try using --multi-dex option.
 
 So the suggestion is to use the `--multi-dex` option of the `dx` utility; this
 will generate several dex files (`classes.dex`, `classes2.dex`, etc.) that will
-be included in the APK. Since the `dx` utility is not currently configurable
-from the Android plugin for Gradle you will have to add this options manually
-to the dx script (e.g. edit `$ANDROID_HOME/build-tools/19.1.0/dx`; in my case
-the last line looks like this: `exec java $javaOpts -jar "$jarpath" --multi-dex "$@"`)
+be included in the APK. To do so, add the following code to your app's `build.gradle` file:
+
+```
+afterEvaluate {
+    tasks.matching {
+        it.name.startsWith('dex')
+    }.each { dx ->
+        if (dx.additionalParameters == null) {
+            dx.additionalParameters = ['--multi-dex']
+        } else {
+            dx.additionalParameters += '--multi-dex'
+        }
+    }
+}
+```
 
 By default Dalvik's classloader will look for the `classes.dex` file only, so
 it's necessary to patch it so that it can read from multiple dex files. That's
@@ -78,11 +89,13 @@ android/support/multidex/ZipUtil$CentralDirectory.class
 android/support/multidex/ZipUtil.class
 ```
 
-And pass the path of this file to the `--main-dex-list` option of the `dx` utility.
+And pass the path of this file to the `--main-dex-list` option of the `dx` utility. Just extend the example from above accordingly by adding more items to the list of strings exposed by the `additionalParameters` property:
 
-Since the `dx` utility is not currently configurable from the Android plugin for
-Gradle you will have to add this options manually to the dx script (e.g.
-edit `$ANDROID_HOME/build-tools/19.1.0/dx`)
+```
+            // ...
+            dx.additionalParameters += '--main-dex-list <filename>'
+            // ...
+```
 
 ### `build.gradle` example
 
