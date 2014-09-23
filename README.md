@@ -94,12 +94,14 @@ android/support/multidex/ZipUtil$CentralDirectory.class
 android/support/multidex/ZipUtil.class
 ```
 
-And pass the path of this file to the `--main-dex-list` option of the `dx` utility. Just extend the example from above accordingly by adding more items to the list of strings exposed by the `additionalParameters` property:
+And pass the path of this file to the `--main-dex-list` option of the `dx` utility. Just extend the example from above accordingly by adding one more item to the list of strings exposed by the `additionalParameters` property:
 
 ```
             // ...
-            dx.additionalParameters += '--main-dex-list <filename>'
-            // ...
+        }
+        dx.additionalParameters += '--main-dex-list <filename>'
+    }
+}
 ```
 
 ### `build.gradle` example
