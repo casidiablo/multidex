@@ -109,7 +109,8 @@ And pass the path of this file to the `--main-dex-list` option of the `dx` utili
 ```groovy
 buildscript {
     repositories {
-        mavenCentral()
+        jcenter()
+
         maven {
             url 'http://saturday06.github.io/gradle-android-scala-plugin/repository/snapshot'
         }
@@ -124,7 +125,6 @@ apply plugin: 'com.android.application'
 apply plugin: 'android-scala'
 
 repositories {
-    mavenCentral()
     jcenter()
 }
 
