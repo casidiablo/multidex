@@ -32,10 +32,12 @@ afterEvaluate {
         it.name.startsWith('dex')
     }.each { dx ->
         if (dx.additionalParameters == null) {
-            dx.additionalParameters = ['--multi-dex']
-        } else {
-            dx.additionalParameters += '--multi-dex'
+            dx.additionalParameters = []
         }
+        dx.additionalParameters += '--multi-dex' // enable multidex
+        
+        // optional
+        // dx.additionalParameters += "--main-dex-list=$projectDir/<filename>".toString() // enable the main-dex-list
     }
 }
 ```
@@ -43,6 +45,27 @@ afterEvaluate {
 By default Dalvik's classloader will look for the `classes.dex` file only, so
 it's necessary to patch it so that it can read from multiple dex files. That's
 what this project provides.
+
+If you are unlucky enough, the multidex classes will not be included in the
+`classes.dex` file (the first one read by the classloader), which in turn
+will render all this useless. There's a workaround for this though. Create a file
+with this content and a arbitrary name:
+
+```
+android/support/multidex/BuildConfig.class
+android/support/multidex/MultiDex$V14.class
+android/support/multidex/MultiDex$V19.class
+android/support/multidex/MultiDex$V4.class
+android/support/multidex/MultiDex.class
+android/support/multidex/MultiDexApplication.class
+android/support/multidex/MultiDexExtractor$1.class
+android/support/multidex/MultiDexExtractor.class
+android/support/multidex/ZipUtil$CentralDirectory.class
+android/support/multidex/ZipUtil.class
+```
+
+And pass the path of this file to the `--main-dex-list` option of the `dx` utility. Just uncomment the example from above accordingly by enabling one more item to the list of strings exposed by the `additionalParameters` property.
+The `<filename>` is the arbitrary choosed above.
 
 ### Usage
 
@@ -72,35 +95,8 @@ import android.support.multidex.MultiDex;
 
 @Override
 protected void attachBaseContext(Context base) {
-  super.attachBaseContext(base);
-  MultiDex.install(this);
-```
-
-If you are unlucky enough, the multidex classes will not be included in the
-`classes.dex` file (the first one read by the classloader), which in turn
-will render all this useless. There's a workaround for this though. Create a file
-with this content:
-
-```
-android/support/multidex/BuildConfig.class
-android/support/multidex/MultiDex$V14.class
-android/support/multidex/MultiDex$V19.class
-android/support/multidex/MultiDex$V4.class
-android/support/multidex/MultiDex.class
-android/support/multidex/MultiDexApplication.class
-android/support/multidex/MultiDexExtractor$1.class
-android/support/multidex/MultiDexExtractor.class
-android/support/multidex/ZipUtil$CentralDirectory.class
-android/support/multidex/ZipUtil.class
-```
-
-And pass the path of this file to the `--main-dex-list` option of the `dx` utility. Just extend the example from above accordingly by adding one more item to the list of strings exposed by the `additionalParameters` property:
-
-```
-            // ...
-        }
-        dx.additionalParameters += '--main-dex-list <filename>'
-    }
+    super.attachBaseContext(base);
+    MultiDex.install(this);
 }
 ```
 
@@ -149,3 +145,54 @@ dependencies {
     compile 'org.scaloid:scaloid_2.11:3.4-10'
 }
 ```
+
+### Cautions
+
+If you extends the `MultiDexApplication` or override the method `attachBaseContext`, you need to remember:
+
+- The static fields in your application class will be loaded before the `MultiDex#install`be called! So the suggestion is to avoid static fields with types that can be placed out of main classes.dex file.
+- The methods of your application may not have access to other classes that are loaded after your application class. As workarround for this, you can create another class (any class, in the example above, I use Runnable) and execute the method content inside it. Example:
+```java
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        
+        final Context mContext = this;
+        new Runnable() {
+
+            @Override
+            public void run() {
+                // put your logic here!
+                // use the mContext instead of this here
+            }
+        }.run();
+    }
+```
+
+### Commons problems
+
+If you catch this error:
+```
+Error:Execution failed for task ':app:dexDebug'.
+> com.android.ide.common.internal.LoggedErrorException: Failed to run command:
+  	$ANDROID_SDK/build-tools/android-4.4W/dx --dex --num-threads=4 --multi-dex
+  	...
+  Error Code:
+  	2
+  Output:
+  	UNEXPECTED TOP-LEVEL EXCEPTION:
+  	com.android.dex.DexException: Library dex files are not supported in multi-dex mode
+  		at com.android.dx.command.dexer.Main.runMultiDex(Main.java:322)
+  		at com.android.dx.command.dexer.Main.run(Main.java:228)
+  		at com.android.dx.command.dexer.Main.main(Main.java:199)
+  		at com.android.dx.command.Main.main(Main.java:103)
+```
+
+The `--multi-dex` option to `dx` is incompatible with pre-dexing library projects. So if your app uses library projects, you need to disable pre-dexing before you can use --multi-dex:
+````groovy
+android {
+    // ...
+    dexOptions {
+        preDexLibraries = false
+    }
+}
