@@ -169,7 +169,7 @@ If you extends the `MultiDexApplication` or override the method `attachBaseConte
     }
 ```
 
-### Commons problems
+### Common problems
 
 If you catch this error:
 ```
