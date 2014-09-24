@@ -171,7 +171,7 @@ If you extends the `MultiDexApplication` or override the method `attachBaseConte
 
 ### Commons problems
 
-If will catch this error:
+If you catch this error:
 ```
 Error:Execution failed for task ':app:dexDebug'.
 > com.android.ide.common.internal.LoggedErrorException: Failed to run command:
