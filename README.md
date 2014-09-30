@@ -149,10 +149,11 @@ dependencies {
 ### Cautions
 
 If you extends the `MultiDexApplication` or override the method `attachBaseContext`, you need to remember:
-*NOTE: The following cautions must be taken only on your android Application class, you don't need to apply this cautions in all classes of your app*
 
-- The static fields in your *application class* will be loaded before the `MultiDex#install`be called! So the suggestion is to avoid static fields with types that can be placed out of main classes.dex file.
-- The methods of your *application class* may not have access to other classes that are loaded after your application class. As workarround for this, you can create another class (any class, in the example above, I use Runnable) and execute the method content inside it. Example:
+**NOTE: The following cautions must be taken only on your android Application class, you don't need to apply this cautions in all classes of your app**
+
+- The static fields in your **application class** will be loaded before the `MultiDex#install`be called! So the suggestion is to avoid static fields with types that can be placed out of main classes.dex file.
+- The methods of your **application class** may not have access to other classes that are loaded after your application class. As workarround for this, you can create another class (any class, in the example above, I use Runnable) and execute the method content inside it. Example:
 ```java
     @Override
     public void onCreate() {
