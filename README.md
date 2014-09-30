@@ -171,6 +171,8 @@ If you extends the `MultiDexApplication` or override the method `attachBaseConte
 
 ### Common problems
 
+#### DexException: Library dex files are not supported in multi-dex mode
+
 If you catch this error:
 ```
 Error:Execution failed for task ':app:dexDebug'.
@@ -196,3 +198,21 @@ android {
         preDexLibraries = false
     }
 }
+```
+
+#### OutOfMemoryError: Java heap space
+
+If you catch this error while running dex:
+```
+UNEXPECTED TOP-LEVEL ERROR:
+java.lang.OutOfMemoryError: Java heap space
+```
+There is an field on dexOptions to increase the java heap space:
+```groovy
+android {
+    // ...
+    dexOptions {
+        javaMaxHeapSize "2g"
+    }
+}
+```
