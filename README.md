@@ -106,27 +106,23 @@ protected void attachBaseContext(Context base) {
 buildscript {
     repositories {
         jcenter()
-
-        maven {
-            url 'http://saturday06.github.io/gradle-android-scala-plugin/repository/snapshot'
-        }
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:0.12.2'
-        classpath 'jp.leafytree.gradle:gradle-android-scala-plugin:1.0-SNAPSHOT'
+        classpath 'com.android.tools.build:gradle:0.13.3'
+        classpath 'jp.leafytree.gradle:gradle-android-scala-plugin:1.1'
     }
 }
 
 apply plugin: 'com.android.application'
-apply plugin: 'android-scala'
+apply plugin: 'jp.leafytree.android-scala'
 
 repositories {
     jcenter()
 }
 
 android {
-    compileSdkVersion 19
-    buildToolsVersion '20' // tested on 19.x family too
+    compileSdkVersion 21
+    buildToolsVersion '21.0.2'
 
     defaultConfig {
         applicationId 'some.app'
