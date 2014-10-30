@@ -108,7 +108,7 @@ buildscript {
         jcenter()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:0.12.2'
+        classpath 'com.android.tools.build:gradle:0.13.3'
         classpath 'jp.leafytree.gradle:gradle-android-scala-plugin:1.1'
     }
 }
@@ -121,8 +121,8 @@ repositories {
 }
 
 android {
-    compileSdkVersion 19
-    buildToolsVersion '20' // tested on 19.x family too
+    compileSdkVersion 21
+    buildToolsVersion '21.0.2'
 
     defaultConfig {
         applicationId 'some.app'
