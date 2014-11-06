@@ -1,5 +1,34 @@
-`android.support.multidex`
---------------------------
+IMPORTANT: this library has been superseded by buildToolsVersion 21.1.0
+----
+
+The steps for multidexing if you are using 21.1.0 or higher is:
+
+```
+android {
+    compileSdkVersion 21
+    buildToolsVersion "21.1.0"
+
+    defaultConfig {
+        ...
+        minSdkVersion 14
+        targetSdkVersion 21
+        ...
+
+        // Enabling multidex support.
+        multiDexEnabled true
+    }
+    ...
+}
+
+dependencies {
+  compile 'com.android.support:multidex:1.0.0'
+}
+```
+
+I'll keep this around for reference, but I encourage all people using this to switch to the official multidexing method: [Building Apps with Over 65K Methods](http://developer.android.com/tools/building/multidex.html).
+
+Deprecated, non-official multidex
+---------------------------------
 
 Library Project including compatibility multi dex loader.
 
