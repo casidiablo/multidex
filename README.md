@@ -19,11 +19,9 @@ android {
     }
     ...
 }
-
-dependencies {
-  compile 'com.android.support:multidex:1.0.0'
-}
 ```
+
+Note that the dependency on 'com.android.support:multidex:1.0.0' is automatic, there is not need to specify it.
 
 I'll keep this around for reference, but I encourage all people using this to switch to the official multidexing method: [Building Apps with Over 65K Methods](http://developer.android.com/tools/building/multidex.html).
 
